@@ -5,9 +5,29 @@ interface HeaderProps {
   storeName: string;
   lowStockCount: number;
   pendingUdhaar: number;
+  isOnline: boolean;
+  offlineCount: number;
+  stores: any[];
+  activeStoreId: string;
+  onStoreSwitch: (id: string) => void;
+  onAddStore: (name: string, type: string) => void;
+  userName?: string;
+  userPlan?: string;
 }
 
-export default function Header({ storeName, lowStockCount, pendingUdhaar }: HeaderProps) {
+export default function Header({ 
+  storeName, 
+  lowStockCount, 
+  pendingUdhaar,
+  isOnline,
+  offlineCount,
+  stores,
+  activeStoreId,
+  onStoreSwitch,
+  onAddStore,
+  userName = "Suresh",
+  userPlan = "Pro"
+}: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [currentDateStr, setCurrentDateStr] = useState('');
 
@@ -15,7 +35,7 @@ export default function Header({ storeName, lowStockCount, pendingUdhaar }: Head
     // Generate standard form e.g. Wed, 3 Jun 2026
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const d = new Date("2026-06-10T07:34:16Z");
+    const d = new Date("2026-06-10T13:02:10Z");
     const dayName = days[d.getUTCDay()];
     const dateNum = d.getUTCDate();
     const monthName = months[d.getUTCMonth()];
@@ -28,15 +48,23 @@ export default function Header({ storeName, lowStockCount, pendingUdhaar }: Head
       {/* Greetings & Date */}
       <div>
         <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-          Good morning, Suresh <span className="animate-bounce">👋</span>
+          Good morning, {userName} <span className="animate-bounce">👋</span>
         </h2>
         <p className="text-xs text-slate-500 font-medium">{currentDateStr || "Wed, 10 Jun 2026"}</p>
       </div>
 
       {/* Global Actions */}
       <div className="flex items-center gap-4">
+        {/* Sync Status Badge */}
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-full select-none cursor-help shrink-0" title={isOnline ? "LeadgerX sync engine connected" : "You are working offline. Entries are buffered safely in IndexedDB"}>
+          <span className={`h-2 w-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500 animate-ping'}`} />
+          <span className="text-[10px] font-bold text-slate-600 tracking-tight">
+            {isOnline ? 'ONLINE' : `OFFLINE (${offlineCount} PENDING)`}
+          </span>
+        </div>
+
         {/* Search Input bar */}
-        <div className="relative w-72">
+        <div className="relative w-64 hidden xl:block">
           <span className="absolute left-3.5 top-3 text-slate-400">
             <Search className="h-4 w-4" />
           </span>
@@ -102,14 +130,37 @@ export default function Header({ storeName, lowStockCount, pendingUdhaar }: Head
           )}
         </div>
 
-        {/* Pro badge & store symbol */}
+        {/* Store Selector dropdown */}
         <div className="flex items-center gap-2 border-l border-slate-200 pl-4">
-          <div className="h-8 w-8 rounded-lg bg-black text-white font-bold text-xs flex items-center justify-center shadow-xs">
-            SK
+          <div className="h-8 w-8 rounded-lg bg-teal-800 text-white font-bold text-xs flex items-center justify-center shadow-xs">
+            {storeName ? storeName.slice(0, 2).toUpperCase() : 'SK'}
           </div>
-          <div className="text-left hidden xl:block">
-            <h4 className="font-bold text-xs text-slate-900 leading-none">Suresh Kirana</h4>
-            <span className="text-[9px] bg-slate-100 border border-slate-200 text-slate-700 font-bold uppercase tracking-wider px-1 rounded-sm mt-0.5 inline-block">Pro Tier</span>
+          <div className="text-left select-none">
+            <select
+              value={activeStoreId}
+              onChange={(e) => onStoreSwitch(e.target.value)}
+              className="font-bold text-xs text-slate-900 bg-transparent border-none pr-1.5 focus:outline-none focus:ring-0 cursor-pointer outline-none hover:text-teal-700 transition-colors"
+            >
+              {stores.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+            <div className="flex items-center gap-2 mt-0.5 leading-none">
+              <span className="text-[9px] bg-teal-50 border border-teal-100 text-teal-700 font-bold uppercase tracking-wider px-1 rounded-sm">
+                {userPlan} Tier
+              </span>
+              <button
+                onClick={() => {
+                  const name = prompt("Enter new business / store name:");
+                  if (name) onAddStore(name, "kirana");
+                }}
+                className="text-[9px] text-slate-400 hover:text-slate-900 font-bold transition-all underline cursor-pointer"
+              >
+                + New Entity
+              </button>
+            </div>
           </div>
         </div>
       </div>

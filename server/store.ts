@@ -12,6 +12,9 @@ interface DatabaseSchema {
   inventory: InventoryItem[];
   udhaar: UdhaarRecord[];
   chatHistory: ChatMessage[];
+  stores?: any[];
+  auditLogs?: any[];
+  invoiceTemplates?: any[];
 }
 
 const DEFAULT_DB: DatabaseSchema = {

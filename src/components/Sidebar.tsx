@@ -17,6 +17,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout }: Sid
     { id: 'inventory', name: 'Inventory', icon: Package },
     { id: 'udhaar', name: 'Udhaar Ledger', icon: CreditCard },
     { id: 'coach', name: 'AI Business Coach', icon: MessageSquare },
+    { id: 'audit', name: 'Audit Logs', icon: Activity },
     { id: 'settings', name: 'Settings', icon: Settings },
   ];
 

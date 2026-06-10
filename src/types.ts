@@ -20,6 +20,7 @@ export interface Entry {
   status: 'paid' | 'pending' | 'udhaar';
   date: string;
   userId?: string;
+  storeId?: string;
 }
 
 export interface Customer {
@@ -33,6 +34,7 @@ export interface Customer {
   aiRecoverySuggestions: string[];
   purchaseCount: number;
   userId?: string;
+  storeId?: string;
 }
 
 export interface UdhaarRecord {
@@ -46,6 +48,7 @@ export interface UdhaarRecord {
   lastPaymentDate?: string;
   paymentHistory: { date: string; amount: number }[];
   userId?: string;
+  storeId?: string;
 }
 
 export interface InventoryItem {
@@ -60,6 +63,7 @@ export interface InventoryItem {
   supplierName?: string;
   expiryDate?: string;
   userId?: string;
+  storeId?: string;
 }
 
 export interface ChatMessage {

@@ -9,10 +9,12 @@ import InventoryView from './components/InventoryView';
 import UdhaarLedgerView from './components/UdhaarLedgerView';
 import CoachView from './components/CoachView';
 import SettingsView from './components/SettingsView';
+import AuditLogsView from './components/AuditLogsView';
 import LandingPage from './components/LandingPage';
 import AuthPage from './components/AuthPage';
 
 import { User, Entry, Customer, InventoryItem, UdhaarRecord, ChatMessage, BusinessSummary } from './types';
+import { saveOfflineEntry, getOfflineEntries, clearOfflineEntries } from './utils/offlineDb';
 
 export default function App() {
   const [isLanding, setIsLanding] = useState(true);
@@ -36,12 +38,25 @@ export default function App() {
     recentActivity: []
   });
 
+  // Enterprise additions properties state
+  const [stores, setStores] = useState<any[]>([]);
+  const [activeStoreId, setActiveStoreId] = useState<string>('');
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [offlineCount, setOfflineCount] = useState(0);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [isRefreshingLogs, setIsRefreshingLogs] = useState(false);
+  const [invoiceTemplate, setInvoiceTemplate] = useState<any>(null);
+
   const [coachLoading, setCoachLoading] = useState(false);
 
   // Retrieve authentication headers context
   const getAuthHeaders = () => {
     const token = localStorage.getItem('leadgerx_token');
-    return token ? { 'Authorization': `Bearer ${token}` } : {};
+    const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+    if (activeStoreId) {
+      headers['x-store-id'] = activeStoreId;
+    }
+    return headers;
   };
 
   // Fetch full data stack
@@ -74,6 +89,143 @@ export default function App() {
     }
   };
 
+  // Enterprise setup loading calls
+  const fetchStores = async () => {
+    try {
+      const headers = getAuthHeaders();
+      const res = await fetch('/api/stores', { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setStores(data);
+        if (data.length > 0 && !activeStoreId) {
+          setActiveStoreId(data[0].id);
+        }
+      }
+    } catch (e) {
+      console.warn("Error loading stores list:", e);
+    }
+  };
+
+  const handleAddStoreHandler = async (name: string, type: string) => {
+    try {
+      const headers = getAuthHeaders();
+      const response = await fetch('/api/stores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ name, type })
+      });
+      if (response.ok) {
+        await fetchStores();
+      }
+    } catch (e) {
+      console.error("Error creating new store entity:", e);
+    }
+  };
+
+  const fetchAuditLogs = async () => {
+    setIsRefreshingLogs(true);
+    try {
+      const headers = getAuthHeaders();
+      const res = await fetch('/api/admin/audit-logs', { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setAuditLogs(data);
+      }
+    } catch (e) {
+      console.warn("Compliance log reader error:", e);
+    } finally {
+      setIsRefreshingLogs(false);
+    }
+  };
+
+  const fetchInvoiceTemplate = async () => {
+    try {
+      const headers = getAuthHeaders();
+      const res = await fetch('/api/invoice-template', { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setInvoiceTemplate(data);
+      }
+    } catch (e) {
+      console.warn("Template reader error:", e);
+    }
+  };
+
+  const handleSaveInvoiceTemplate = async (templateConfigs: any) => {
+    try {
+      const headers = getAuthHeaders();
+      const res = await fetch('/api/invoice-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify(templateConfigs)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setInvoiceTemplate(data.template);
+      }
+    } catch (e) {
+      console.error("Template writer error:", e);
+    }
+  };
+
+  // Sync background queued offline entries safely back to our cloud database
+  const syncOfflineEntriesToServer = async () => {
+    if (!navigator.onLine) return;
+    try {
+      const offlineItems = await getOfflineEntries();
+      if (offlineItems.length === 0) return;
+
+      const headers = getAuthHeaders();
+      const response = await fetch('/api/offline-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ entries: offlineItems.map(item => item.data) })
+      });
+
+      if (response.ok) {
+        await clearOfflineEntries();
+        setOfflineCount(0);
+        await fetchAllData();
+        await fetchAuditLogs();
+      }
+    } catch (e) {
+      console.error("Back online offline sync failure:", e);
+    }
+  };
+
+  // React state watcher for connection changes
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      syncOfflineEntriesToServer();
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    getOfflineEntries().then(items => {
+      setOfflineCount(items.length);
+    });
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [activeStoreId]);
+
+  // Sync full application stack on active switches
+  useEffect(() => {
+    if (isAuth) {
+      fetchStores();
+      fetchInvoiceTemplate();
+      fetchAuditLogs();
+      fetchAllData();
+    }
+  }, [isAuth, activeStoreId]);
+
   // Check auth session on load
   useEffect(() => {
     const checkAuthStatus = async () => {
@@ -86,7 +238,6 @@ export default function App() {
             setUser(data);
             setIsAuth(true);
             setIsLanding(false);
-            fetchAllData();
           }
         }
       } catch (err) {
@@ -151,14 +302,51 @@ export default function App() {
 
   // --- CRUD API TRIGGER ACTIONS (Durable & React state synced) ---
   const handleAddEntry = async (entryData: any) => {
+    const richEntry = { ...entryData, storeId: activeStoreId };
+
+    if (!isOnline) {
+      // 1. Buffering entry safely offline
+      await saveOfflineEntry(richEntry);
+      
+      // 2. Incrementing pending offline count
+      const items = await getOfflineEntries();
+      setOfflineCount(items.length);
+
+      // 3. Immediately display on screen for instant feedback
+      const localOffId = `temp-off-${Date.now()}`;
+      const tempEntry: Entry = {
+        id: localOffId,
+        customerName: entryData.customerName || "Self",
+        productName: entryData.productName || "Miscellaneous",
+        quantity: Number(entryData.quantity) || 1,
+        price: Number(entryData.price) || 0,
+        amount: (Number(entryData.quantity) || 1) * (Number(entryData.price) || 0),
+        type: entryData.type || "sale",
+        status: entryData.status || "paid",
+        date: entryData.date || new Date().toISOString(),
+        userId: user?.id || 'offline-user',
+        storeId: activeStoreId
+      };
+      setEntries([tempEntry, ...entries]);
+      
+      // Update local quick stats summary
+      setSummary(prev => ({
+        ...prev,
+        todaySales: prev.todaySales + tempEntry.amount,
+        todaySalesCount: prev.todaySalesCount + 1
+      }));
+      return;
+    }
+
     try {
       const response = await fetch('/api/entries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify(entryData)
+        body: JSON.stringify(richEntry)
       });
       if (response.ok) {
         await fetchAllData();
+        await fetchAuditLogs();
       }
     } catch (e) {
       console.error("Add Entry Error:", e);
@@ -366,9 +554,17 @@ export default function App() {
       {/* 2. Operations visual viewport split */}
       <div className="flex-1 flex flex-col min-w-0">
         <Header 
-          storeName={user?.storeName || "Suresh Kirana"} 
+          storeName={stores.find(s => s.id === activeStoreId)?.name || user?.storeName || "Suresh Kirana"} 
           lowStockCount={summary.lowStockCount} 
           pendingUdhaar={summary.pendingUdhaar} 
+          isOnline={isOnline}
+          offlineCount={offlineCount}
+          stores={stores}
+          activeStoreId={activeStoreId}
+          onStoreSwitch={setActiveStoreId}
+          onAddStore={handleAddStoreHandler}
+          userName={user?.name}
+          userPlan={user?.plan}
         />
 
         <div className="flex-1 overflow-y-auto">
@@ -456,6 +652,16 @@ export default function App() {
                   user={user} 
                   onSaveSettings={handleSaveSettings} 
                   onDeleteAccount={handleDeleteAccount} 
+                  template={invoiceTemplate}
+                  onSaveTemplate={handleSaveInvoiceTemplate}
+                />
+              )}
+
+              {activeTab === 'audit' && (
+                <AuditLogsView
+                  logs={auditLogs}
+                  onRefreshLogs={fetchAuditLogs}
+                  isRefreshing={isRefreshingLogs}
                 />
               )}
             </motion.div>

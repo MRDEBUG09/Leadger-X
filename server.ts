@@ -58,6 +58,21 @@ const getCurrentUser = (req: any) => {
   }
 };
 
+const logActivity = (userId: string, userName: string, action: string, details: string, storeId?: string) => {
+  LocalStore.updateAll((db) => {
+    if (!db.auditLogs) db.auditLogs = [];
+    db.auditLogs.unshift({
+      id: `log-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+      userId,
+      userName,
+      action,
+      details,
+      timestamp: new Date().toISOString(),
+      storeId: storeId || `store-${userId}-primary`
+    });
+  });
+};
+
 // Seeding engine to clone default books of Suresh into newly registered account portfolios
 const seedNewUserBooks = (db: any, newUserId: string) => {
   const sureshId = "user-suresh";
@@ -202,10 +217,11 @@ app.post("/api/auth/save-settings", (req, res) => {
 app.get("/api/summary", (req, res) => {
   const user = getCurrentUser(req);
   const db = LocalStore.getAll();
+  const storeId = req.headers['x-store-id'] || `store-${user.id}-primary`;
   
-  const userEntries = db.entries.filter(e => (e.userId || "user-suresh") === user.id);
-  const userCustomers = db.customers.filter(c => (c.userId || "user-suresh") === user.id);
-  const userInventory = db.inventory.filter(i => (i.userId || "user-suresh") === user.id);
+  const userEntries = db.entries.filter(e => (e.userId || "user-suresh") === user.id && (!e.storeId || e.storeId === storeId));
+  const userCustomers = db.customers.filter(c => (c.userId || "user-suresh") === user.id && (!c.storeId || c.storeId === storeId));
+  const userInventory = db.inventory.filter(i => (i.userId || "user-suresh") === user.id && (!i.storeId || i.storeId === storeId));
   
   // Calculate today's sales
   const today = new Date().toISOString().split('T')[0];
@@ -265,7 +281,11 @@ app.get("/api/summary", (req, res) => {
 app.get("/api/entries", (req, res) => {
   const user = getCurrentUser(req);
   const db = LocalStore.getAll();
-  const userEntries = db.entries.filter(e => (e.userId || "user-suresh") === user.id);
+  const storeId = req.headers['x-store-id'] || `store-${user.id}-primary`;
+  const userEntries = db.entries.filter(e => 
+    (e.userId || "user-suresh") === user.id && 
+    (!e.storeId || e.storeId === storeId)
+  );
   res.json(userEntries);
 });
 
@@ -345,10 +365,19 @@ app.post("/api/entries", (req, res) => {
     }
   });
 
+  logActivity(
+    user.id,
+    user.name,
+    "CREATE_ENTRY",
+    `Logged entry: ${newEntry.quantity}x ${newEntry.productName} for ₹${newEntry.amount} (${newEntry.type.toUpperCase()}) to ${newEntry.customerName}`,
+    req.headers['x-store-id']?.toString()
+  );
+
   res.json({ success: true, entry: newEntry });
 });
 
 app.put("/api/entries/:id", (req, res) => {
+  const user = getCurrentUser(req);
   const { id } = req.params;
   const updateData = req.body;
 
@@ -356,14 +385,32 @@ app.put("/api/entries/:id", (req, res) => {
     const idx = db.entries.findIndex(e => e.id === id);
     if (idx !== -1) {
       db.entries[idx] = { ...db.entries[idx], ...updateData, amount: Number(updateData.quantity) * Number(updateData.price) };
+      logActivity(
+        user.id,
+        user.name,
+        "UPDATE_ENTRY",
+        `Updated entry: ${db.entries[idx].productName} for ₹${db.entries[idx].amount}`,
+        req.headers['x-store-id']?.toString()
+      );
     }
   });
   res.json({ success: true });
 });
 
 app.delete("/api/entries/:id", (req, res) => {
+  const user = getCurrentUser(req);
   const { id } = req.params;
   LocalStore.updateAll((db) => {
+    const entry = db.entries.find(e => e.id === id);
+    if (entry) {
+      logActivity(
+        user.id,
+        user.name,
+        "DELETE_ENTRY",
+        `Deleted entry: ${entry.productName} for ₹${entry.amount}`,
+        req.headers['x-store-id']?.toString()
+      );
+    }
     db.entries = db.entries.filter(e => e.id !== id);
   });
   res.json({ success: true });
@@ -374,7 +421,11 @@ app.delete("/api/entries/:id", (req, res) => {
 app.get("/api/customers", (req, res) => {
   const user = getCurrentUser(req);
   const db = LocalStore.getAll();
-  const userCustomers = db.customers.filter(c => (c.userId || "user-suresh") === user.id);
+  const storeId = req.headers['x-store-id'] || `store-${user.id}-primary`;
+  const userCustomers = db.customers.filter(c => 
+    (c.userId || "user-suresh") === user.id && 
+    (!c.storeId || c.storeId === storeId)
+  );
   res.json(userCustomers);
 });
 
@@ -417,7 +468,11 @@ app.put("/api/customers/:id", (req, res) => {
 app.get("/api/inventory", (req, res) => {
   const user = getCurrentUser(req);
   const db = LocalStore.getAll();
-  const userInventory = db.inventory.filter(i => (i.userId || "user-suresh") === user.id);
+  const storeId = req.headers['x-store-id'] || `store-${user.id}-primary`;
+  const userInventory = db.inventory.filter(i => 
+    (i.userId || "user-suresh") === user.id && 
+    (!i.storeId || i.storeId === storeId)
+  );
   res.json(userInventory);
 });
 
@@ -571,7 +626,11 @@ app.post("/api/inventory/bulk-price-update", (req, res) => {
 app.get("/api/udhaar", (req, res) => {
   const user = getCurrentUser(req);
   const db = LocalStore.getAll();
-  const userUdhaar = db.udhaar.filter(u => (u.userId || "user-suresh") === user.id);
+  const storeId = req.headers['x-store-id'] || `store-${user.id}-primary`;
+  const userUdhaar = db.udhaar.filter(u => 
+    (u.userId || "user-suresh") === user.id && 
+    (!u.storeId || u.storeId === storeId)
+  );
   res.json(userUdhaar);
 });
 
@@ -1095,6 +1154,183 @@ app.get("/api/reports/download/:format", (req, res) => {
     report += `========================================\n`;
     return res.send(report);
   }
+});
+
+// --- SERVICE WORKER SERVER ROUTE ---
+app.get('/sw.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript');
+  res.sendFile(path.resolve(process.cwd(), 'src/sw.js'));
+});
+
+// --- STORES API ---
+app.get("/api/stores", (req, res) => {
+  const user = getCurrentUser(req);
+  const db = LocalStore.getAll();
+  if (!db.stores) db.stores = [];
+  
+  let userStores = db.stores.filter(s => s.userId === user.id);
+  if (userStores.length === 0) {
+    const defaultStore = {
+      id: `store-${user.id}-primary`,
+      name: user.storeName || "Primary Kirana Store",
+      userId: user.id,
+      address: "Main Market, Sector 4, New Delhi",
+      gstNumber: "08AAAAA1111A1Z1",
+      type: "kirana"
+    };
+    db.stores.push(defaultStore);
+    LocalStore.updateAll((d) => {
+      if (!d.stores) d.stores = [];
+      d.stores.push(defaultStore);
+    });
+    userStores = [defaultStore];
+    logActivity(user.id, user.name, "CREATE_STORE", `System auto-seeded primary business entity: ${defaultStore.name}`, defaultStore.id);
+  }
+  res.json(userStores);
+});
+
+app.post("/api/stores", (req, res) => {
+  const user = getCurrentUser(req);
+  const { name, type, address, gstNumber } = req.body;
+  if (!name) return res.status(400).json({ success: false, error: "Store name is required" });
+
+  const newStore = {
+    id: `store-${Date.now()}`,
+    name,
+    userId: user.id,
+    type: type || "kirana",
+    address: address || "Market Area No. 2",
+    gstNumber: gstNumber || ""
+  };
+
+  LocalStore.updateAll((db) => {
+    if (!db.stores) db.stores = [];
+    db.stores.push(newStore);
+  });
+
+  logActivity(user.id, user.name, "CREATE_STORE", `Created new business entity store location: ${newStore.name}`, newStore.id);
+  res.json({ success: true, store: newStore });
+});
+
+// --- ADMIN AUDIT TRAIL API ---
+app.get("/api/admin/audit-logs", (req, res) => {
+  const user = getCurrentUser(req);
+  const db = LocalStore.getAll();
+  if (!db.auditLogs) db.auditLogs = [];
+  
+  const userLogs = db.auditLogs.filter(l => l.userId === user.id);
+  res.json(userLogs);
+});
+
+// --- INVOICE TEMPLATE SETTINGS API ---
+app.get("/api/invoice-template", (req, res) => {
+  const user = getCurrentUser(req);
+  const storeId = req.headers['x-store-id'] || `store-${user.id}-primary`;
+  const db = LocalStore.getAll();
+  if (!db.invoiceTemplates) db.invoiceTemplates = [];
+  
+  let template = db.invoiceTemplates.find(t => t.storeId === storeId);
+  if (!template) {
+    template = {
+      id: `tmpl-${Date.now()}`,
+      storeId,
+      themeColor: "#0f766e", // Teal hex
+      logoUrl: "",
+      layout: "standard",
+      footerText: "Thank you for shopping with us! Visit again.",
+      gstEnabled: true,
+      termsEnabled: true
+    };
+    LocalStore.updateAll((d) => {
+      if (!d.invoiceTemplates) d.invoiceTemplates = [];
+      d.invoiceTemplates.push(template);
+    });
+  }
+  res.json(template);
+});
+
+app.post("/api/invoice-template", (req, res) => {
+  const user = getCurrentUser(req);
+  const storeId = req.headers['x-store-id'] || `store-${user.id}-primary`;
+  const { themeColor, logoUrl, layout, footerText, gstEnabled, termsEnabled } = req.body;
+  
+  LocalStore.updateAll((db) => {
+    if (!db.invoiceTemplates) db.invoiceTemplates = [];
+    
+    const idx = db.invoiceTemplates.findIndex(t => t.storeId === storeId);
+    const updated = {
+      id: idx !== -1 ? db.invoiceTemplates[idx].id : `tmpl-${Date.now()}`,
+      storeId,
+      themeColor: themeColor || "#0f766e",
+      logoUrl: logoUrl || "",
+      layout: layout || "standard",
+      footerText: footerText || "Thank you for shopping with us! Visit again.",
+      gstEnabled: gstEnabled !== undefined ? gstEnabled : true,
+      termsEnabled: termsEnabled !== undefined ? termsEnabled : true
+    };
+
+    if (idx !== -1) {
+      db.invoiceTemplates[idx] = updated;
+    } else {
+      db.invoiceTemplates.push(updated);
+    }
+  });
+
+  logActivity(user.id, user.name, "UPDATE_INVOICE_TEMPLATE", `Updated billing invoice PDF layout styling settings for store of ID ${storeId}`, storeId.toString());
+  res.json({ success: true });
+});
+
+// --- OFFLINE BOOKKEEPING SYNCHRONIZER ---
+app.post("/api/offline-sync", (req, res) => {
+  const user = getCurrentUser(req);
+  const storeId = req.headers['x-store-id'] || `store-${user.id}-primary`;
+  const { entries } = req.body;
+  
+  if (!Array.isArray(entries)) {
+    return res.status(400).json({ success: false, error: "Entries array is required for synchronization" });
+  }
+
+  const syncedList: any[] = [];
+  LocalStore.updateAll((db) => {
+    entries.forEach((item: any) => {
+      const entryData = item.data;
+      const newEntry: Entry = {
+        id: `e-sync-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+        customerName: entryData.customerName || "Self",
+        productName: entryData.productName || "Miscellaneous",
+        quantity: Number(entryData.quantity) || 1,
+        price: Number(entryData.price) || 0,
+        amount: (Number(entryData.quantity) || 1) * (Number(entryData.price) || 0),
+        type: entryData.type || "sale",
+        status: entryData.status || "paid",
+        date: entryData.date || new Date().toISOString(),
+        userId: user.id
+      };
+      
+      db.entries.push(newEntry);
+      
+      // Auto update inventory stocks
+      if (newEntry.type === 'sale') {
+        const p = db.inventory.find(i => (i.userId || "user-suresh") === user.id && i.name.toLowerCase() === newEntry.productName.toLowerCase());
+        if (p) p.stock = Math.max(0, p.stock - newEntry.quantity);
+      } else {
+        const p = db.inventory.find(i => (i.userId || "user-suresh") === user.id && i.name.toLowerCase() === newEntry.productName.toLowerCase());
+        if (p) p.stock += newEntry.quantity;
+      }
+      
+      syncedList.push(newEntry);
+    });
+  });
+
+  logActivity(
+    user.id,
+    user.name,
+    "OFFLINE_SYNC",
+    `Successfully synchronized ${entries.length} offline bookings entries queued from low-connectivity ledger sessions`,
+    storeId.toString()
+  );
+
+  res.json({ success: true, syncedCount: entries.length, syncedList });
 });
 
 
