@@ -5,6 +5,7 @@ export interface User {
   storeName: string;
   plan: 'Free' | 'Pro';
   password?: string;
+  role?: 'Owner' | 'Manager' | 'Employee' | 'Admin';
 }
 
 export interface Entry {
