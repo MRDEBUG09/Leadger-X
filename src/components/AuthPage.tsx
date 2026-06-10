@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { Sparkles, ArrowRight, Lock, Mail, Store, UserCheck } from 'lucide-react';
 
 interface AuthPageProps {
-  onAuthSuccess: (user: any) => void;
+  onAuthSuccess: (user: any, token?: string) => void;
   onBack: () => void;
 }
 
@@ -26,7 +26,7 @@ export default function AuthPage({ onAuthSuccess, onBack }: AuthPageProps) {
       const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
       const body = isLogin 
         ? { email, password } 
-        : { name, email, storeName };
+        : { name, email, storeName, password };
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -36,7 +36,7 @@ export default function AuthPage({ onAuthSuccess, onBack }: AuthPageProps) {
 
       const data = await response.json();
       if (data.success) {
-        onAuthSuccess(data.user);
+        onAuthSuccess(data.user, data.token);
       } else {
         setError(data.error || 'Authentication failed. Please verify credentials.');
       }
@@ -61,7 +61,7 @@ export default function AuthPage({ onAuthSuccess, onBack }: AuthPageProps) {
       const response = await fetch('/api/auth/google', { method: 'POST' });
       const data = await response.json();
       if (data.success) {
-        onAuthSuccess(data.user);
+        onAuthSuccess(data.user, data.token);
       }
     } catch (e) {
       onAuthSuccess({

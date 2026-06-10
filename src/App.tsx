@@ -38,15 +38,22 @@ export default function App() {
 
   const [coachLoading, setCoachLoading] = useState(false);
 
+  // Retrieve authentication headers context
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('leadgerx_token');
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+  };
+
   // Fetch full data stack
   const fetchAllData = async () => {
     try {
+      const headers = getAuthHeaders();
       const [resSummary, resEntries, resCust, resInv, resUdhaar] = await Promise.all([
-        fetch('/api/summary'),
-        fetch('/api/entries'),
-        fetch('/api/customers'),
-        fetch('/api/inventory'),
-        fetch('/api/udhaar')
+        fetch('/api/summary', { headers }),
+        fetch('/api/entries', { headers }),
+        fetch('/api/customers', { headers }),
+        fetch('/api/inventory', { headers }),
+        fetch('/api/udhaar', { headers })
       ]);
 
       const [dataSummary, dataEntries, dataCust, dataInv, dataUdhaar] = await Promise.all([
@@ -71,7 +78,8 @@ export default function App() {
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
-        const response = await fetch('/api/auth/me');
+        const headers = getAuthHeaders();
+        const response = await fetch('/api/auth/me', { headers });
         if (response.ok) {
           const data = await response.json();
           if (data && data.id) {
@@ -92,7 +100,7 @@ export default function App() {
       {
         id: "greet-1",
         sender: "assistant",
-        text: "Hello Suresh! Welcome to your LeadgerX AI Business Coach. I have analyzed your store's performance today. Sales are progressing nicely! How can I assist you with credit risk, inventory restocking, or margin optimization today?",
+        text: "Hello! Welcome to your LeadgerX AI Business Coach. I have analyzed your store's performance today. Sales are progressing nicely! How can I assist you with credit risk, inventory restocking, or margin optimization today?",
         timestamp: new Date().toISOString()
       }
     ]);
@@ -102,7 +110,10 @@ export default function App() {
     setIsLanding(false);
   };
 
-  const handleAuthSuccess = (authenticatedUser: User) => {
+  const handleAuthSuccess = (authenticatedUser: User, token?: string) => {
+    if (token) {
+      localStorage.setItem('leadgerx_token', token);
+    }
     setUser(authenticatedUser);
     setIsAuth(true);
     setIsLanding(false);
@@ -110,6 +121,7 @@ export default function App() {
   };
 
   const handleLogout = async () => {
+    localStorage.removeItem('leadgerx_token');
     setUser(null);
     setIsAuth(false);
     setIsLanding(true);
@@ -120,7 +132,7 @@ export default function App() {
     try {
       const response = await fetch('/api/auth/save-settings', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(configs)
       });
       const data = await response.json();
@@ -142,7 +154,7 @@ export default function App() {
     try {
       const response = await fetch('/api/entries', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(entryData)
       });
       if (response.ok) {
@@ -156,7 +168,8 @@ export default function App() {
   const handleDeleteEntry = async (id: string) => {
     try {
       const response = await fetch(`/api/entries/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: getAuthHeaders()
       });
       if (response.ok) {
         await fetchAllData();
@@ -170,7 +183,7 @@ export default function App() {
     try {
       const response = await fetch('/api/customers', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(custData)
       });
       if (response.ok) {
@@ -185,7 +198,7 @@ export default function App() {
     try {
       const response = await fetch('/api/inventory', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(itemData)
       });
       if (response.ok) {
@@ -200,7 +213,7 @@ export default function App() {
     try {
       const response = await fetch('/api/udhaar/collect', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ udhaarId, amountCollected: amt })
       });
       if (response.ok) {
@@ -226,7 +239,7 @@ export default function App() {
     try {
       const response = await fetch('/api/ai/coach', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ messages: updatedChats })
       });
       const data = await response.json();
@@ -334,6 +347,21 @@ export default function App() {
                   customers={customers} 
                   onAddCustomer={handleAddCustomer} 
                   onSendReminder={handleSendManualWhatsAppReminder} 
+                  onReassessRisk={async (id) => {
+                    try {
+                      const response = await fetch(`/api/ai/customer-risk/${id}`, {
+                        method: 'POST',
+                        headers: getAuthHeaders()
+                      });
+                      if (response.ok) {
+                        const data = await response.json();
+                        await fetchAllData();
+                        return data.customer;
+                      }
+                    } catch (err) {
+                      console.error("Failed requesting AI risk reassessment:", err);
+                    }
+                  }}
                 />
               )}
 

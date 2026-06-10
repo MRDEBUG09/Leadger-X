@@ -7,15 +7,17 @@ interface CustomersProps {
   customers: Customer[];
   onAddCustomer: (customer: { name: string; phone: string; email?: string }) => Promise<void>;
   onSendReminder: (phone: string, text: string) => void;
+  onReassessRisk?: (customerId: string) => Promise<Customer | undefined>;
 }
 
-export default function CustomersView({ customers, onAddCustomer, onSendReminder }: CustomersProps) {
+export default function CustomersView({ customers, onAddCustomer, onSendReminder, onReassessRisk }: CustomersProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [reassessing, setReassessing] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,10 +29,30 @@ export default function CustomersView({ customers, onAddCustomer, onSendReminder
     setShowAddCustomer(false);
   };
 
+  const handleTriggerReassessment = async () => {
+    if (!selectedCustomer || !onReassessRisk) return;
+    setReassessing(true);
+    try {
+      const updatedCust = await onReassessRisk(selectedCustomer.id);
+      if (updatedCust) {
+        setSelectedCustomer(updatedCust);
+      }
+    } catch (e) {
+      console.warn("Failed AI reassessment:", e);
+    } finally {
+      setReassessing(false);
+    }
+  };
+
   const filteredCustomers = customers.filter(c => 
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.phone.includes(searchTerm)
   );
+
+  // Sync selected customer state with possible updates from props
+  const currentCustomer = selectedCustomer 
+    ? (customers.find(c => c.id === selectedCustomer.id) || selectedCustomer)
+    : null;
 
   return (
     <div className="p-8 space-y-6" id="customers-module-container">
@@ -87,7 +109,7 @@ export default function CustomersView({ customers, onAddCustomer, onSendReminder
                   id={`cust-row-${c.id}`}
                   onClick={() => setSelectedCustomer(c)}
                   className={`p-4 flex items-center justify-between cursor-pointer transition-colors duration-150 ${
-                    selectedCustomer?.id === c.id ? 'bg-slate-50' : 'hover:bg-slate-50/50'
+                    currentCustomer?.id === c.id ? 'bg-slate-50' : 'hover:bg-slate-50/50'
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -125,16 +147,16 @@ export default function CustomersView({ customers, onAddCustomer, onSendReminder
 
         {/* Right Active Analytics Details Profile split */}
         <div className="space-y-4">
-          {selectedCustomer ? (
+          {currentCustomer ? (
             <div className="bg-white border border-slate-200 rounded-3xl p-6 space-y-5 shadow-sm" id="customer-risk-profile-panel">
               <div className="flex items-center gap-3.5 border-b border-slate-100 pb-4">
                 <div className="h-11 w-11 bg-slate-900 text-white font-bold rounded-xl flex items-center justify-center text-sm shadow-inner">
-                  {selectedCustomer.name.split(' ').map(n => n[0]).join('')}
+                  {currentCustomer.name.split(' ').map(n => n[0]).join('')}
                 </div>
-                <div>
-                  <h3 className="font-extrabold text-sm text-slate-950 tracking-tight leading-none">{selectedCustomer.name}</h3>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-extrabold text-sm text-slate-950 tracking-tight leading-none truncate">{currentCustomer.name}</h3>
                   <p className="text-[10px] text-slate-400 font-medium font-mono mt-1 flex items-center gap-1.5">
-                    <Phone className="h-3 w-3 shrink-0" /> {selectedCustomer.phone}
+                    <Phone className="h-3 w-3 shrink-0" /> {currentCustomer.phone}
                   </p>
                 </div>
               </div>
@@ -144,16 +166,30 @@ export default function CustomersView({ customers, onAddCustomer, onSendReminder
                 <div>
                   <p className="text-[10px] text-slate-400 font-bold uppercase">Repayment Risk</p>
                   <p className={`text-sm font-black mt-0.5 capitalize ${
-                    selectedCustomer.aiRiskStatus === 'Low' ? 'text-emerald-700' : selectedCustomer.aiRiskStatus === 'Medium' ? 'text-amber-700' : 'text-red-650'
+                    currentCustomer.aiRiskStatus === 'Low' ? 'text-emerald-700' : currentCustomer.aiRiskStatus === 'Medium' ? 'text-amber-700' : 'text-red-650'
                   }`}>
-                    {selectedCustomer.aiRiskStatus} ({selectedCustomer.aiRiskScore}%)
+                    {currentCustomer.aiRiskStatus} ({currentCustomer.aiRiskScore}%)
                   </p>
                 </div>
                 <div>
                   <p className="text-[10px] text-slate-400 font-bold uppercase">Outstanding Limit</p>
-                  <p className="text-xs font-bold text-slate-900 font-mono mt-0.5">₹{selectedCustomer.outstandingBalance.toLocaleString()}</p>
+                  <p className="text-xs font-bold text-slate-900 font-mono mt-0.5">₹{currentCustomer.outstandingBalance.toLocaleString()}</p>
                 </div>
               </div>
+
+              {/* Real-time assessment trigger button */}
+              {onReassessRisk && (
+                <button
+                  type="button"
+                  id="btn-reassess-risk-trigger"
+                  onClick={handleTriggerReassessment}
+                  disabled={reassessing}
+                  className="w-full border border-slate-200 hover:border-black text-slate-850 hover:bg-slate-55 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs"
+                >
+                  <RefreshCw className={`h-4 w-4 text-slate-500 ${reassessing ? 'animate-spin' : ''}`} />
+                  {reassessing ? 'Evaluating Balance Sheets...' : 'Assess Credit Risk with Gemini'}
+                </button>
+              )}
 
               {/* Recoveries suggestions from Gemini API */}
               <div className="space-y-2.5">
@@ -161,7 +197,7 @@ export default function CustomersView({ customers, onAddCustomer, onSendReminder
                   <ShieldCheck className="h-4 w-4 text-slate-800" /> AI Recovery playbook
                 </h4>
                 <div className="space-y-2">
-                  {selectedCustomer.aiRecoverySuggestions.map((sug, id) => (
+                  {(currentCustomer.aiRecoverySuggestions || []).map((sug, id) => (
                     <div key={id} className="text-[11px] leading-relaxed text-slate-700 bg-slate-100/65 border border-slate-200/80 p-2.5 rounded-lg font-medium">
                       {sug}
                     </div>
@@ -170,13 +206,13 @@ export default function CustomersView({ customers, onAddCustomer, onSendReminder
               </div>
 
               {/* Action alert reminder collection buttons */}
-              {selectedCustomer.outstandingBalance > 0 && (
+              {currentCustomer.outstandingBalance > 0 && (
                 <div className="space-y-2 border-t border-slate-100 pt-4">
                   <span className="text-[10px] font-bold text-slate-400 uppercase">Bookkeeping Reminders</span>
                   <button
                     onClick={() => {
-                      const msg = `Dear ${selectedCustomer.name}, Suresh Kirana kindly requests settlement of pending udhaar amount of ₹${selectedCustomer.outstandingBalance}. Thank you for your continued trade!`;
-                      onSendReminder(selectedCustomer.phone, msg);
+                      const msg = `Dear ${currentCustomer.name}, Suresh Kirana kindly requests settlement of pending udhaar amount of ₹${currentCustomer.outstandingBalance}. Thank you for your continued trade!`;
+                      onSendReminder(currentCustomer.phone, msg);
                     }}
                     id="btn-customer-reminder-prompt"
                     className="w-full bg-slate-900 hover:bg-black text-white text-xs font-bold py-2.5 rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"

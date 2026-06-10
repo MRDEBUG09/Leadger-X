@@ -4,6 +4,7 @@ export interface User {
   name: string;
   storeName: string;
   plan: 'Free' | 'Pro';
+  password?: string;
 }
 
 export interface Entry {
@@ -18,6 +19,7 @@ export interface Entry {
   type: 'sale' | 'expense';
   status: 'paid' | 'pending' | 'udhaar';
   date: string;
+  userId?: string;
 }
 
 export interface Customer {
@@ -30,6 +32,7 @@ export interface Customer {
   aiRiskStatus: 'Low' | 'Medium' | 'High';
   aiRecoverySuggestions: string[];
   purchaseCount: number;
+  userId?: string;
 }
 
 export interface UdhaarRecord {
@@ -42,6 +45,7 @@ export interface UdhaarRecord {
   dateCreated: string;
   lastPaymentDate?: string;
   paymentHistory: { date: string; amount: number }[];
+  userId?: string;
 }
 
 export interface InventoryItem {
@@ -55,6 +59,7 @@ export interface InventoryItem {
   category: string;
   supplierName?: string;
   expiryDate?: string;
+  userId?: string;
 }
 
 export interface ChatMessage {
