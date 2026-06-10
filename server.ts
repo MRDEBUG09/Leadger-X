@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import { GoogleGenAI, Type } from "@google/genai";
 import { LocalStore } from "./server/store.js";
 import { Entry, Customer, InventoryItem, UdhaarRecord, ChatMessage } from "./src/types";
+import { generatePDFReport } from "./server/services/pdfReport.js";
 
 dotenv.config();
 
@@ -33,7 +34,11 @@ const getGeminiClient = () => {
 // --- ROBUST BASE64 SESSION JWT HELPER ---
 const getCurrentUser = (req: any) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  let token = authHeader && authHeader.split(' ')[1];
+  
+  if (!token && req.query.token) {
+    token = req.query.token as string;
+  }
   
   const db = LocalStore.getAll();
   const demoUser = db.users.find(u => u.id === "user-suresh") || {
@@ -193,7 +198,7 @@ app.post("/api/auth/google", (req, res) => {
 
 app.post("/api/auth/save-settings", (req, res) => {
   const user = getCurrentUser(req);
-  const { name, storeName, email, plan } = req.body;
+  const { name, storeName, email, plan, role } = req.body;
 
   LocalStore.updateAll((db) => {
     const idx = db.users.findIndex(u => u.id === user.id);
@@ -203,7 +208,8 @@ app.post("/api/auth/save-settings", (req, res) => {
         name: name || db.users[idx].name,
         storeName: storeName || db.users[idx].storeName,
         email: email || db.users[idx].email,
-        plan: plan || db.users[idx].plan
+        plan: plan || db.users[idx].plan,
+        role: role || db.users[idx].role || 'Owner'
       };
     }
   });
@@ -1153,6 +1159,42 @@ app.get("/api/reports/download/:format", (req, res) => {
     report += `- Accumulated Outstanding credit (Udhaar): ₹${outstanding}\n`;
     report += `========================================\n`;
     return res.send(report);
+  }
+});
+
+// --- DURABLE PDF REPORT EXPORTER (PDFKit) ---
+app.get("/api/reports/pdf", (req, res) => {
+  const user = getCurrentUser(req);
+  const db = LocalStore.getAll();
+  const type = (req.query.type as 'sales' | 'udhaar' | 'inventory') || 'sales';
+  
+  const activeStoreId = req.headers['x-store-id'] || `store-${user.id}-primary`;
+  const store = (db.stores || []).find(s => s.id === activeStoreId) || {
+    name: user.storeName || "Suresh Kirana Store"
+  };
+
+  const userEntries = db.entries.filter(e => (e.userId || "user-suresh") === user.id);
+  const userUdhaar = db.udhaar.filter(u => (u.userId || "user-suresh") === user.id);
+  const userInventory = db.inventory.filter(i => (i.userId || "user-suresh") === user.id);
+
+  const data = {
+    entries: userEntries,
+    udhaar: userUdhaar,
+    inventory: userInventory
+  };
+
+  const meta = {
+    storeName: store.name || user.storeName || "Suresh Kirana Store",
+    userName: user.name || "Suresh Kumar",
+    email: user.email || "prashantmenaria7@gmail.com",
+    plan: user.plan || "Pro"
+  };
+
+  try {
+    generatePDFReport(res, type, data, meta);
+  } catch (err: any) {
+    console.error("Failed to generate PDF audit reports:", err);
+    res.status(500).json({ success: false, error: "Report generation failed." });
   }
 });
 

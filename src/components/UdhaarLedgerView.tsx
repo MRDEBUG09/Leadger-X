@@ -50,6 +50,18 @@ export default function UdhaarLedgerView({ udhaarRecords, onCollectUdhaar }: Udh
           </h2>
           <p className="text-xs text-slate-500 font-medium font-sans">Verify outstanding client debts, log partial clearances, and check payment collections history.</p>
         </div>
+
+        <button
+          onClick={() => {
+            const token = localStorage.getItem('leadgerx_token');
+            window.location.href = `/api/reports/pdf?type=udhaar&token=${token || ''}`;
+          }}
+          id="btn-export-udhaar-pdf"
+          className="border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold px-5 py-2.5 rounded-full flex items-center gap-2 transition-all cursor-pointer shadow-sm w-fit shrink-0 font-sans"
+        >
+          <Receipt className="h-4 w-4 text-red-500" />
+          Export Ledger PDF
+        </button>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-3xl p-4 shadow-sm flex items-center relative gap-4">

@@ -21,6 +21,13 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout }: Sid
     { id: 'settings', name: 'Settings', icon: Settings },
   ];
 
+  const allowedMenuItems = menuItems.filter(item => {
+    if (user?.role === 'Employee') {
+      return item.id !== 'audit' && item.id !== 'settings';
+    }
+    return true;
+  });
+
   return (
     <div className="w-64 bg-white border-r border-slate-200 h-screen flex flex-col justify-between sticky top-0" id="leadgerx-sidebar">
       <div>
@@ -39,7 +46,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout }: Sid
 
         {/* Navigation Items */}
         <nav className="p-4 space-y-1">
-          {menuItems.map((item) => {
+          {allowedMenuItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             return (

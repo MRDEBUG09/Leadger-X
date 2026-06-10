@@ -5,7 +5,7 @@ import { User } from '../types';
 
 interface SettingsProps {
   user: User | null;
-  onSaveSettings: (settings: { name: string; storeName: string; email: string; plan: 'Free' | 'Pro' }) => Promise<void>;
+  onSaveSettings: (settings: { name: string; storeName: string; email: string; plan: 'Free' | 'Pro'; role: 'Owner' | 'Employee' }) => Promise<void>;
   onDeleteAccount: () => void;
   // Invoice template settings props
   template: {
@@ -40,6 +40,7 @@ export default function SettingsView({
   const [storeName, setStoreName] = useState(user?.storeName || 'Suresh Kirana Store');
   const [email, setEmail] = useState(user?.email || 'prashantmenaria7@gmail.com');
   const [plan, setPlan] = useState<'Free' | 'Pro'>(user?.plan || 'Pro');
+  const [role, setRole] = useState<'Owner' | 'Employee'>(user?.role === 'Employee' ? 'Employee' : 'Owner');
   const [notifSound, setNotifSound] = useState(true);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -70,12 +71,13 @@ export default function SettingsView({
       setStoreName(user.storeName);
       setEmail(user.email);
       setPlan(user.plan);
+      setRole(user.role === 'Employee' ? 'Employee' : 'Owner');
     }
   }, [user]);
 
   const handleSaveSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onSaveSettings({ name, storeName, email, plan });
+    await onSaveSettings({ name, storeName, email, plan, role });
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 3000);
   };
@@ -203,6 +205,18 @@ export default function SettingsView({
                   >
                     <option value="Pro">Pro Access (₹499/Mo automatic billing)</option>
                     <option value="Free">Free Basic (Limits Voice Logs / Vision Scanner)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">System Authorization Role</label>
+                  <select
+                    value={role}
+                    onChange={(e) => setRole(e.target.value as any)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:ring-1 focus:ring-black focus:outline-none font-medium text-slate-700"
+                  >
+                    <option value="Owner">Owner (Full administrative rights)</option>
+                    <option value="Employee">Employee (Restricted financial metrics, locked logs/customization)</option>
                   </select>
                 </div>
 

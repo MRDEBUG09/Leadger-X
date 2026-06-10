@@ -190,6 +190,19 @@ export default function EntriesView({ entries, inventory, onAddEntry, onDeleteEn
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* PDF Report Export Button */}
+          <button
+            onClick={() => {
+              const token = localStorage.getItem('leadgerx_token');
+              window.location.href = `/api/reports/pdf?type=sales&token=${token || ''}`;
+            }}
+            id="btn-export-sales-pdf"
+            className="border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold px-4 py-2.5 rounded-full flex items-center gap-2 transition-all cursor-pointer shadow-sm"
+          >
+            <FileText className="h-4 w-4 text-emerald-500" />
+            Export Sales PDF
+          </button>
+
           {/* Voice Prompt Action */}
           <button
             id="btn-voice-dictate-trigger"

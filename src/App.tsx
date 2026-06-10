@@ -15,8 +15,26 @@ import AuthPage from './components/AuthPage';
 
 import { User, Entry, Customer, InventoryItem, UdhaarRecord, ChatMessage, BusinessSummary } from './types';
 import { saveOfflineEntry, getOfflineEntries, clearOfflineEntries } from './utils/offlineDb';
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutes cache
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <MainApp />
+    </QueryClientProvider>
+  );
+}
+
+function MainApp() {
   const [isLanding, setIsLanding] = useState(true);
   const [isAuth, setIsAuth] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -48,6 +66,7 @@ export default function App() {
   const [invoiceTemplate, setInvoiceTemplate] = useState<any>(null);
 
   const [coachLoading, setCoachLoading] = useState(false);
+  const qClient = useQueryClient();
 
   // Retrieve authentication headers context
   const getAuthHeaders = () => {
@@ -59,33 +78,94 @@ export default function App() {
     return headers;
   };
 
-  // Fetch full data stack
+  // --- TANSTACK REACT QUERY CACHING LAYER ---
+  const { data: qSummary } = useQuery({
+    queryKey: ['summary', activeStoreId, user?.id],
+    queryFn: async () => {
+      const token = localStorage.getItem('leadgerx_token');
+      if (!token) return null;
+      const res = await fetch('/api/summary', { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error('Failed to fetch summary');
+      return res.json();
+    },
+    enabled: isAuth && !!user,
+  });
+
+  const { data: qEntries } = useQuery({
+    queryKey: ['entries', activeStoreId, user?.id],
+    queryFn: async () => {
+      const token = localStorage.getItem('leadgerx_token');
+      if (!token) return [];
+      const res = await fetch('/api/entries', { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error('Failed to fetch entries');
+      return res.json();
+    },
+    enabled: isAuth && !!user,
+  });
+
+  const { data: qCustomers } = useQuery({
+    queryKey: ['customers', activeStoreId, user?.id],
+    queryFn: async () => {
+      const token = localStorage.getItem('leadgerx_token');
+      if (!token) return [];
+      const res = await fetch('/api/customers', { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error('Failed to fetch customers');
+      return res.json();
+    },
+    enabled: isAuth && !!user,
+  });
+
+  const { data: qInventory } = useQuery({
+    queryKey: ['inventory', activeStoreId, user?.id],
+    queryFn: async () => {
+      const token = localStorage.getItem('leadgerx_token');
+      if (!token) return [];
+      const res = await fetch('/api/inventory', { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error('Failed to fetch inventory');
+      return res.json();
+    },
+    enabled: isAuth && !!user,
+  });
+
+  const { data: qUdhaar } = useQuery({
+    queryKey: ['udhaar', activeStoreId, user?.id],
+    queryFn: async () => {
+      const token = localStorage.getItem('leadgerx_token');
+      if (!token) return [];
+      const res = await fetch('/api/udhaar', { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error('Failed to fetch udhaar');
+      return res.json();
+    },
+    enabled: isAuth && !!user,
+  });
+
+  // Synchronize state setters with React Query data
+  useEffect(() => {
+    if (qSummary) setSummary(qSummary);
+  }, [qSummary]);
+
+  useEffect(() => {
+    if (qEntries) setEntries(qEntries);
+  }, [qEntries]);
+
+  useEffect(() => {
+    if (qCustomers) setCustomers(qCustomers);
+  }, [qCustomers]);
+
+  useEffect(() => {
+    if (qInventory) setInventory(qInventory);
+  }, [qInventory]);
+
+  useEffect(() => {
+    if (qUdhaar) setUdhaar(qUdhaar);
+  }, [qUdhaar]);
+
+  // Fetch full data stack (clears caching triggers)
   const fetchAllData = async () => {
     try {
-      const headers = getAuthHeaders();
-      const [resSummary, resEntries, resCust, resInv, resUdhaar] = await Promise.all([
-        fetch('/api/summary', { headers }),
-        fetch('/api/entries', { headers }),
-        fetch('/api/customers', { headers }),
-        fetch('/api/inventory', { headers }),
-        fetch('/api/udhaar', { headers })
-      ]);
-
-      const [dataSummary, dataEntries, dataCust, dataInv, dataUdhaar] = await Promise.all([
-        resSummary.json(),
-        resEntries.json(),
-        resCust.json(),
-        resInv.json(),
-        resUdhaar.json()
-      ]);
-
-      setSummary(dataSummary);
-      setEntries(dataEntries);
-      setCustomers(dataCust);
-      setInventory(dataInv);
-      setUdhaar(dataUdhaar);
+      await qClient.invalidateQueries();
     } catch (e) {
-      console.warn("Failed fetching live datasets, loading seeding fallback.", e);
+      console.warn("Failed invalidating live query pools.", e);
     }
   };
 
@@ -586,6 +666,7 @@ export default function App() {
                   onQuickVoiceLog={triggerQuickVoiceModal}
                   onQuickBillScanner={triggerQuickBillModal}
                   onQuickAddEntry={triggerQuickAddEntryModal}
+                  user={user}
                 />
               )}
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { LayoutDashboard, Mic, ArrowUpRight, ArrowDownRight, Users, CreditCard, Package, ChevronRight, CheckCircle, RefreshCw, FileText, Check, AlertTriangle, Play } from 'lucide-react';
-import { Entry, Customer, InventoryItem, BusinessSummary } from '../types';
+import { Entry, Customer, InventoryItem, BusinessSummary, User } from '../types';
 
 interface DashboardProps {
   summary: BusinessSummary;
@@ -11,6 +11,7 @@ interface DashboardProps {
   onQuickVoiceLog: () => void;
   onQuickBillScanner: () => void;
   onQuickAddEntry: () => void;
+  user?: User | null;
 }
 
 export default function DashboardView({ 
@@ -20,7 +21,8 @@ export default function DashboardView({
   setActiveTab, 
   onQuickVoiceLog, 
   onQuickBillScanner, 
-  onQuickAddEntry 
+  onQuickAddEntry,
+  user
 }: DashboardProps) {
 
   const progressPercent = Math.min(100, Math.round((summary.weeklyProgress?.current / summary.weeklyProgress?.goal) * 100)) || 90;
@@ -64,6 +66,19 @@ export default function DashboardView({
         </div>
       </div>
 
+      {user?.role === 'Employee' && (
+        <div className="bg-amber-55/60 border border-amber-200 text-amber-900 p-4 rounded-2xl flex items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
+            <div>
+              <p className="text-xs font-bold leading-none">Standard Employee View Mode</p>
+              <p className="text-[10px] text-amber-700 mt-1">Store financials are redacted. Audit logs and store invoice customization sections are restricted only to company Owners.</p>
+            </div>
+          </div>
+          <span className="text-[9px] bg-amber-100 border border-amber-200 font-bold text-amber-805 px-2 py-0.5 rounded-md uppercase font-mono">Restricted Access</span>
+        </div>
+      )}
+
       {/* 2. Visual KPI Overview stats row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5" id="dashboard-stats-row">
         {/* Card 1: Revenue sales */}
@@ -72,10 +87,18 @@ export default function DashboardView({
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
               <span className="p-1 rounded-lg bg-slate-50 text-slate-805"><LayoutDashboard className="h-3 w-3" /></span> Today's Sales
             </p>
-            <h3 className="text-2xl font-bold text-black font-sans tracking-tight">₹{summary.todaySales?.toLocaleString()}</h3>
-            <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1 w-fit">
-              <ArrowUpRight className="h-3 w-3 text-emerald-500" /> +14% today
-            </span>
+            <h3 className="text-2xl font-bold text-black font-sans tracking-tight">
+              {user?.role === 'Employee' ? '₹••,•••' : `₹${summary.todaySales?.toLocaleString()}`}
+            </h3>
+            {user?.role === 'Employee' ? (
+              <span className="text-[10px] text-amber-700 font-bold bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full flex items-center gap-1 w-fit">
+                Redacted for Employee
+              </span>
+            ) : (
+              <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1 w-fit">
+                <ArrowUpRight className="h-3 w-3 text-emerald-500" /> +14% today
+              </span>
+            )}
           </div>
         </div>
 
@@ -85,10 +108,18 @@ export default function DashboardView({
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
               <span className="p-1 rounded-lg bg-slate-50 text-slate-805"><CreditCard className="h-3 w-3" /></span> Pending Udhaar
             </p>
-            <h3 className="text-2xl font-bold text-black font-sans tracking-tight">₹{summary.pendingUdhaar?.toLocaleString()}</h3>
-            <span className="text-[10px] text-red-650 font-bold bg-red-50 border border-red-100 px-2 py-0.5 rounded-full flex items-center gap-1 w-fit">
-              <ArrowDownRight className="h-3 w-3 text-red-500" /> Outstanding
-            </span>
+            <h3 className="text-2xl font-bold text-black font-sans tracking-tight">
+              {user?.role === 'Employee' ? '₹••,•••' : `₹${summary.pendingUdhaar?.toLocaleString()}`}
+            </h3>
+            {user?.role === 'Employee' ? (
+              <span className="text-[10px] text-amber-700 font-bold bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full flex items-center gap-1 w-fit">
+                Redacted for Employee
+              </span>
+            ) : (
+              <span className="text-[10px] text-red-650 font-bold bg-red-50 border border-red-100 px-2 py-0.5 rounded-full flex items-center gap-1 w-fit">
+                <ArrowDownRight className="h-3 w-3 text-red-500" /> Outstanding
+              </span>
+            )}
           </div>
         </div>
 
