@@ -209,6 +209,66 @@ export default function App() {
     }
   };
 
+  const handleBulkAddInventoryItems = async (items: any[]) => {
+    try {
+      const response = await fetch('/api/inventory/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ items })
+      });
+      if (response.ok) {
+        await fetchAllData();
+      }
+    } catch (e) {
+      console.error("Bulk add error:", e);
+    }
+  };
+
+  const handleBulkDeleteInventory = async (ids: string[]) => {
+    try {
+      const response = await fetch('/api/inventory/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ ids })
+      });
+      if (response.ok) {
+        await fetchAllData();
+      }
+    } catch (e) {
+      console.error("Bulk delete error:", e);
+    }
+  };
+
+  const handleBulkUpdateCategory = async (ids: string[], category: string) => {
+    try {
+      const response = await fetch('/api/inventory/bulk-update-category', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ ids, category })
+      });
+      if (response.ok) {
+        await fetchAllData();
+      }
+    } catch (e) {
+      console.error("Bulk category update error:", e);
+    }
+  };
+
+  const handleBulkPriceUpdate = async (ids: string[], field: string, changeType: string, value: number) => {
+    try {
+      const response = await fetch('/api/inventory/bulk-price-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ ids, field, changeType, value })
+      });
+      if (response.ok) {
+        await fetchAllData();
+      }
+    } catch (e) {
+      console.error("Bulk price update error:", e);
+    }
+  };
+
   const handleCollectUdhaar = async (udhaarId: string, amt: number) => {
     try {
       const response = await fetch('/api/udhaar/collect', {
@@ -369,6 +429,10 @@ export default function App() {
                 <InventoryView 
                   inventory={inventory} 
                   onAddItem={handleAddInventoryItem} 
+                  onBulkAddItems={handleBulkAddInventoryItems}
+                  onBulkDelete={handleBulkDeleteInventory}
+                  onBulkUpdateCategory={handleBulkUpdateCategory}
+                  onBulkPriceUpdate={handleBulkPriceUpdate}
                 />
               )}
 

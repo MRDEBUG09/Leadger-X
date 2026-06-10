@@ -464,6 +464,108 @@ app.delete("/api/inventory/:id", (req, res) => {
   res.json({ success: true });
 });
 
+app.post("/api/inventory/bulk", (req, res) => {
+  const user = getCurrentUser(req);
+  const { items } = req.body;
+  if (!Array.isArray(items)) {
+    return res.status(400).json({ success: false, error: "Items must be an array" });
+  }
+
+  const newItems: InventoryItem[] = [];
+  LocalStore.updateAll((db) => {
+    items.forEach((item: any, idx: number) => {
+      const newItem: InventoryItem = {
+        id: `inv-${Date.now()}-${idx}-${Math.floor(Math.random() * 1000)}`,
+        name: item.name || "Unnamed Item",
+        sku: item.sku || "SKU-" + Math.floor(Math.random() * 100000),
+        stock: isNaN(Number(item.stock)) ? 0 : Number(item.stock),
+        minStockAlert: isNaN(Number(item.minStockAlert)) ? 5 : Number(item.minStockAlert),
+        purchasePrice: isNaN(Number(item.purchasePrice)) ? 0 : Number(item.purchasePrice),
+        sellingPrice: isNaN(Number(item.sellingPrice)) ? 0 : Number(item.sellingPrice),
+        category: item.category || "General",
+        supplierName: item.supplierName || "Bulk Imported",
+        expiryDate: item.expiryDate || new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        userId: user.id
+      };
+      db.inventory.push(newItem);
+      newItems.push(newItem);
+    });
+  });
+
+  res.json({ success: true, count: newItems.length });
+});
+
+app.post("/api/inventory/bulk-delete", (req, res) => {
+  const user = getCurrentUser(req);
+  const { ids } = req.body;
+  if (!Array.isArray(ids)) {
+    return res.status(400).json({ success: false, error: "IDs must be an array" });
+  }
+
+  LocalStore.updateAll((db) => {
+    db.inventory = db.inventory.filter(i => {
+      if (ids.includes(i.id)) {
+        return (i.userId || "user-suresh") !== user.id;
+      }
+      return true;
+    });
+  });
+
+  res.json({ success: true });
+});
+
+app.post("/api/inventory/bulk-update-category", (req, res) => {
+  const user = getCurrentUser(req);
+  const { ids, category } = req.body;
+  if (!Array.isArray(ids) || !category) {
+    return res.status(400).json({ success: false, error: "IDs array and category are required" });
+  }
+
+  LocalStore.updateAll((db) => {
+    db.inventory.forEach(i => {
+      if (ids.includes(i.id) && (i.userId || "user-suresh") === user.id) {
+        i.category = category;
+      }
+    });
+  });
+
+  res.json({ success: true });
+});
+
+app.post("/api/inventory/bulk-price-update", (req, res) => {
+  const user = getCurrentUser(req);
+  const { ids, field, changeType, value } = req.body;
+  if (!Array.isArray(ids) || !field || !changeType || isNaN(Number(value))) {
+    return res.status(400).json({ success: false, error: "Invalid parameters" });
+  }
+
+  const amt = Number(value);
+  LocalStore.updateAll((db) => {
+    db.inventory.forEach(i => {
+      if (ids.includes(i.id) && (i.userId || "user-suresh") === user.id) {
+        let currentPrice = field === 'sellingPrice' ? i.sellingPrice : i.purchasePrice;
+        let newPrice = currentPrice;
+
+        if (changeType === 'flat') {
+          newPrice = Math.max(0, currentPrice + amt);
+        } else if (changeType === 'percentage') {
+          newPrice = Math.max(0, Math.round(currentPrice * (1 + amt / 100)));
+        } else if (changeType === 'set') {
+          newPrice = Math.max(0, amt);
+        }
+
+        if (field === 'sellingPrice') {
+          i.sellingPrice = newPrice;
+        } else {
+          i.purchasePrice = newPrice;
+        }
+      }
+    });
+  });
+
+  res.json({ success: true });
+});
+
 
 // --- UDHAAR LEDGER ROUTE ---
 app.get("/api/udhaar", (req, res) => {
